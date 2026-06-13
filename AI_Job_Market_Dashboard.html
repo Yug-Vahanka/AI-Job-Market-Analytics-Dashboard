@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Job Market Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: rgba(255,255,255,0.08);
+    --text: #e8eaf6; --muted: #8b90a8; --accent: #4f8ef7; --accent2: #34c78f; --accent3: #f97316;
+    --accent4: #a78bfa; --accent5: #f472b6; --danger: #ef4444;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar { position: fixed; left: 0; top: 0; width: 220px; height: 100vh; background: var(--surface); border-right: 1px solid var(--border); padding: 0; z-index: 100; display: flex; flex-direction: column; }
+  .logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+  .logo-title { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .nav { padding: 12px 0; flex: 1; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,0.08); }
+  .nav-icon { font-size: 16px; width: 18px; text-align: center; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+
+  /* MAIN */
+  .main { margin-left: 220px; min-height: 100vh; }
+  .topbar { padding: 16px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); position: sticky; top: 0; z-index: 50; }
+  .topbar-title { font-size: 16px; font-weight: 600; }
+  .topbar-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .badge { font-size: 11px; background: rgba(79,142,247,0.15); color: var(--accent); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(79,142,247,0.3); }
+
+  .content { padding: 24px 28px; display: none; }
+  .content.active { display: block; }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .kpi-up { color: var(--accent2); }
+
+  /* CHARTS */
+  .charts-grid { display: grid; gap: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 2fr 1fr; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .chart-wrap { position: relative; width: 100%; }
+
+  /* TABLE */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .data-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* SKILL BARS */
+  .skill-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 12px; }
+  .skill-bar-name { width: 120px; color: var(--muted); flex-shrink: 0; font-size: 11px; }
+  .skill-bar-bg { flex: 1; height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+  .skill-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .skill-bar-val { width: 40px; text-align: right; font-size: 11px; color: var(--muted); }
+
+  /* PILL */
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+  .pill-blue { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .pill-green { background: rgba(52,199,143,0.15); color: var(--accent2); }
+  .pill-orange { background: rgba(249,115,22,0.15); color: var(--accent3); }
+  .pill-purple { background: rgba(167,139,250,0.15); color: var(--accent4); }
+
+  /* LEGEND */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* FILTERS ROW */
+  .filter-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filter-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 6px 12px; border-radius: 6px; cursor: pointer; outline: none; }
+
+  /* SECTION HEADER */
+  .section-header { margin-bottom: 18px; }
+  .section-header h2 { font-size: 17px; font-weight: 600; }
+  .section-header p { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 900px) {
+    .sidebar { width: 60px; }
+    .nav-item span { display: none; }
+    .logo-title, .logo-sub, .sidebar-footer { display: none; }
+    .main { margin-left: 60px; }
+    .kpi-grid { grid-template-columns: repeat(2,1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-title">AI Jobs</div>
+    <div class="logo-sub">Analytics Dashboard</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" onclick="showPage('overview',this)"><span class="nav-icon">📊</span><span>Overview</span></div>
+    <div class="nav-item" onclick="showPage('skills',this)"><span class="nav-icon">🛠️</span><span>Skill Demand</span></div>
+    <div class="nav-item" onclick="showPage('salary',this)"><span class="nav-icon">💰</span><span>Salary Analysis</span></div>
+    <div class="nav-item" onclick="showPage('location',this)"><span class="nav-icon">📍</span><span>Locations</span></div>
+    <div class="nav-item" onclick="showPage('company',this)"><span class="nav-icon">🏢</span><span>Companies</span></div>
+  </nav>
+  <div class="sidebar-footer">10,000 job postings · 2022–2025</div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="pageTitle">Executive Overview</div>
+      <div class="topbar-sub">AI / ML Job Market Analysis · 10,000 postings · 2022–2025</div>
+    </div>
+    <span class="badge">📁 Power BI Project</span>
+  </div>
+
+  <!-- PAGE 1: OVERVIEW -->
+  <div id="page-overview" class="content active">
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Total Jobs</div><div class="kpi-value" style="color:var(--accent)">10,000</div><div class="kpi-sub kpi-up">↑ 70% since 2022</div></div>
+      <div class="kpi-card"><div class="kpi-label">Avg Salary</div><div class="kpi-value" style="color:var(--accent2)">$119K</div><div class="kpi-sub">Median $124K</div></div>
+      <div class="kpi-card"><div class="kpi-label">Companies</div><div class="kpi-value" style="color:var(--accent4)">37</div><div class="kpi-sub">Across 5 sectors</div></div>
+      <div class="kpi-card"><div class="kpi-label">Locations</div><div class="kpi-value" style="color:var(--accent3)">19</div><div class="kpi-sub">Cities & remote</div></div>
+      <div class="kpi-card"><div class="kpi-label">Remote Jobs</div><div class="kpi-value" style="color:var(--accent5)">40%</div><div class="kpi-sub">+ 35% hybrid</div></div>
+    </div>
+
+    <div class="charts-grid grid-3" style="margin-bottom:16px;">
+      <div class="chart-card">
+        <div class="chart-title">Job demand growth (2022–2025)</div>
+        <div class="chart-sub">Total AI/ML postings per year</div>
+        <div class="chart-wrap" style="height:220px;"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Work type distribution</div>
+        <div class="chart-sub">Remote vs Hybrid vs Onsite</div>
+        <div class="chart-wrap" style="height:220px;"><canvas id="workTypeChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="charts-grid grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Jobs by location (top 10)</div>
+        <div class="chart-sub">Number of postings per city</div>
+        <div class="chart-wrap" style="height:260px;"><canvas id="locChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Experience level breakdown</div>
+        <div class="chart-sub">Distribution of openings by seniority</div>
+        <div class="chart-wrap" style="height:260px;"><canvas id="expDonutChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2: SKILLS -->
+  <div id="page-skills" class="content">
+    <div class="section-header">
+      <h2>Skill Demand Analysis</h2>
+      <p>Top 15 most requested skills across 10,000 AI/ML job postings</p>
+    </div>
+    <div class="charts-grid grid-2" style="margin-bottom:16px;">
+      <div class="chart-card">
+        <div class="chart-title">Top 15 required skills</div>
+        <div class="chart-sub">Count of job postings mentioning each skill</div>
+        <div class="chart-wrap" style="height:340px;"><canvas id="skillsBarChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Skills demand distribution</div>
+        <div class="chart-sub">Relative share of top 8 skills</div>
+        <div class="chart-wrap" style="height:340px;"><canvas id="skillsPieChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Skill demand — visual breakdown</div>
+      <div class="chart-sub">Percentage of job postings requiring each skill</div>
+      <div id="skillBars" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: SALARY -->
+  <div id="page-salary" class="content">
+    <div class="section-header">
+      <h2>Salary Analysis</h2>
+      <p>Average salaries by role, experience level, and salary band distribution</p>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr); margin-bottom:20px;">
+      <div class="kpi-card"><div class="kpi-label">Highest Role</div><div class="kpi-value" style="color:var(--accent2);font-size:18px;">AI Architect</div><div class="kpi-sub">$150K avg</div></div>
+      <div class="kpi-card"><div class="kpi-label">Entry Level</div><div class="kpi-value" style="color:var(--accent);">$79K</div><div class="kpi-sub">avg salary</div></div>
+      <div class="kpi-card"><div class="kpi-label">Senior Level</div><div class="kpi-value" style="color:var(--accent4);">$137K</div><div class="kpi-sub">avg salary</div></div>
+      <div class="kpi-card"><div class="kpi-label">Lead Level</div><div class="kpi-value" style="color:var(--accent3);">$167K</div><div class="kpi-sub">avg salary</div></div>
+    </div>
+    <div class="charts-grid grid-2" style="margin-bottom:16px;">
+      <div class="chart-card">
+        <div class="chart-title">Average salary by job role</div>
+        <div class="chart-sub">Sorted highest to lowest</div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="salRoleChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Salary by experience level</div>
+        <div class="chart-sub">Average compensation vs seniority</div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="expSalChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Salary band distribution</div>
+      <div class="chart-sub">Number of jobs in each salary range</div>
+      <div class="chart-wrap" style="height:200px;"><canvas id="bandChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- PAGE 4: LOCATION -->
+  <div id="page-location" class="content">
+    <div class="section-header">
+      <h2>Location Analysis</h2>
+      <p>Geographic distribution of AI/ML hiring and salary by city</p>
+    </div>
+    <div class="charts-grid grid-2" style="margin-bottom:16px;">
+      <div class="chart-card">
+        <div class="chart-title">Top hiring cities</div>
+        <div class="chart-sub">Job posting count per location</div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="locBarChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Avg salary by city (USD markets)</div>
+        <div class="chart-sub">Excluding India locations (different pay scale)</div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="locSalChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Location breakdown — detail table</div>
+      <div class="chart-sub">Jobs, avg salary, and salary band per city</div>
+      <div style="margin-top:12px; overflow-x:auto;">
+        <table class="data-table" id="locTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 5: COMPANY -->
+  <div id="page-company" class="content">
+    <div class="section-header">
+      <h2>Company Analysis</h2>
+      <p>Top hiring companies and their AI/ML recruitment activity</p>
+    </div>
+    <div class="charts-grid grid-2" style="margin-bottom:16px;">
+      <div class="chart-card">
+        <div class="chart-title">Top 12 hiring companies</div>
+        <div class="chart-sub">Total AI/ML job postings</div>
+        <div class="chart-wrap" style="height:320px;"><canvas id="compChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Big tech vs others</div>
+        <div class="chart-sub">Hiring concentration</div>
+        <div class="chart-wrap" style="height:320px;"><canvas id="compPieChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Company hiring detail</div>
+      <div class="chart-sub">Job count, category, and notable roles</div>
+      <div style="margin-top:12px; overflow-x:auto;">
+        <table class="data-table" id="compTable"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ────────────────────────────────────────────────────
+const D = {"kpis":{"total_jobs":10000,"avg_salary":119094,"median_salary":124619,"companies":37,"locations":19},"skills":{"labels":["Java","scikit-learn","Airflow","SQL","Transformers","Machine Learning","Data Engineering","GCP","A/B Testing","Azure","Kubernetes","R","NLP","AWS","Linux"],"data":[1683,1670,1662,1662,1657,1653,1653,1650,1644,1644,1643,1637,1637,1637,1632]},"sal_role":{"labels":["AI Architect","AI Research Scientist","Deep Learning Engineer","LLM Engineer","Machine Learning Engineer","Computer Vision Engineer","AI Engineer","NLP Engineer","AI Product Manager","MLOps Engineer","Data Scientist","Data Analyst"],"data":[150138,134429,131683,130168,123667,121172,120822,117730,116082,110061,106305,76716]},"loc":{"labels":["San Francisco, CA","New York, NY","Seattle, WA","Bengaluru, India","Remote","Austin, TX","Boston, MA","Hyderabad, India","Los Angeles, CA","Pune, India"],"data":[1342,1008,880,813,787,684,606,511,494,449]},"exp":{"labels":["Entry","Mid","Senior","Lead"],"counts":[1886,3830,2923,1361],"salaries":[79247,107805,137171,167259]},"comp":{"labels":["Google","Microsoft","Amazon","Meta","Apple","OpenAI","Nvidia","TCS","Salesforce","Infosys","IBM","Wipro"],"data":[852,753,713,651,526,508,400,330,305,299,299,287]},"work_type":{"labels":["Remote","Hybrid","Onsite"],"data":[4013,3473,2514]},"trend":{"labels":["2022","2023","2024","2025"],"data":[968,2077,3523,3432]},"band":{"labels":["100-130K","130-160K","160K+","70-100K","<70K"],"data":[2209,2111,2315,1154,2211]},"loc_sal":{"labels":["Sydney, Australia","Toronto, Canada","Austin, TX","New York, NY","Amsterdam, Netherlands","Los Angeles, CA","Seattle, WA","San Francisco, CA"],"data":[144921,144332,142317,142112,141882,141369,141219,140960]}};
+
+// ── NAVIGATION ───────────────────────────────────────────────
+const pageTitles = {overview:'Executive Overview',skills:'Skill Demand Analysis',salary:'Salary Analysis',location:'Location Analysis',company:'Company Analysis'};
+function showPage(id, el) {
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  el.classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[id];
+}
+
+// ── CHART DEFAULTS ───────────────────────────────────────────
+const C = {
+  text: '#8b90a8', grid: 'rgba(255,255,255,0.05)',
+  blues: ['#4f8ef7','#34c78f','#f97316','#a78bfa','#f472b6','#fb923c','#38bdf8','#4ade80','#facc15','#f87171','#c084fc','#94a3b8'],
+  single: '#4f8ef7'
+};
+Chart.defaults.color = C.text;
+Chart.defaults.borderColor = C.grid;
+Chart.defaults.font.size = 11;
+
+// ── OVERVIEW CHARTS ──────────────────────────────────────────
+new Chart(document.getElementById('trendChart'), {
+  type: 'bar',
+  data: {
+    labels: D.trend.labels,
+    datasets: [{
+      label: 'Jobs posted', data: D.trend.data,
+      backgroundColor: ['rgba(79,142,247,0.4)','rgba(79,142,247,0.55)','rgba(79,142,247,0.8)','rgba(52,199,143,0.8)'],
+      borderColor: ['#4f8ef7','#4f8ef7','#4f8ef7','#34c78f'],
+      borderWidth: 1, borderRadius: 4
+    }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false}}, y:{grid:{color:C.grid}, ticks:{callback:v=>v>=1000?(v/1000).toFixed(1)+'K':v}} } }
+});
+
+new Chart(document.getElementById('workTypeChart'), {
+  type: 'doughnut',
+  data: {
+    labels: D.work_type.labels,
+    datasets: [{ data: D.work_type.data, backgroundColor:['#4f8ef7','#a78bfa','#34c78f'], borderWidth:0, hoverOffset:6 }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{legend:{position:'bottom',labels:{padding:16,usePointStyle:true,pointStyleWidth:10}}} }
+});
+
+new Chart(document.getElementById('locChart'), {
+  type: 'bar', indexAxis:'y',
+  data: {
+    labels: D.loc.labels,
+    datasets: [{ data:D.loc.data, backgroundColor:'rgba(79,142,247,0.65)', borderColor:'#4f8ef7', borderWidth:1, borderRadius:3 }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:C.grid}}, y:{grid:{display:false}, ticks:{font:{size:10}}} } }
+});
+
+new Chart(document.getElementById('expDonutChart'), {
+  type: 'doughnut',
+  data: {
+    labels: D.exp.labels,
+    datasets: [{ data:D.exp.counts, backgroundColor:['#34c78f','#4f8ef7','#a78bfa','#f97316'], borderWidth:0, hoverOffset:6 }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, cutout:'55%', plugins:{legend:{position:'bottom',labels:{padding:14,usePointStyle:true,pointStyleWidth:10}}} }
+});
+
+// ── SKILLS CHARTS ─────────────────────────────────────────────
+new Chart(document.getElementById('skillsBarChart'), {
+  type:'bar', indexAxis:'y',
+  data: {
+    labels: D.skills.labels,
+    datasets:[{ data:D.skills.data, backgroundColor:'rgba(79,142,247,0.7)', borderColor:'#4f8ef7', borderWidth:1, borderRadius:3 }]
+  },
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:C.grid}}, y:{grid:{display:false}, ticks:{font:{size:10}}} } }
+});
+
+new Chart(document.getElementById('skillsPieChart'), {
+  type:'doughnut',
+  data:{
+    labels:D.skills.labels.slice(0,8),
+    datasets:[{data:D.skills.data.slice(0,8), backgroundColor:C.blues.slice(0,8), borderWidth:0, hoverOffset:6}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, cutout:'50%', plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:10},usePointStyle:true,pointStyleWidth:10}}}}
+});
+
+// Skill bars
+const maxSkill = Math.max(...D.skills.data);
+const sbContainer = document.getElementById('skillBars');
+D.skills.labels.forEach((s,i) => {
+  const pct = (D.skills.data[i]/maxSkill*100).toFixed(0);
+  sbContainer.innerHTML += `<div class="skill-bar-row">
+    <span class="skill-bar-name">${s}</span>
+    <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:${pct}%;background:${C.blues[i%C.blues.length]};"></div></div>
+    <span class="skill-bar-val">${D.skills.data[i].toLocaleString()}</span>
+  </div>`;
+});
+
+// ── SALARY CHARTS ─────────────────────────────────────────────
+new Chart(document.getElementById('salRoleChart'), {
+  type:'bar', indexAxis:'y',
+  data:{
+    labels:D.sal_role.labels,
+    datasets:[{data:D.sal_role.data, backgroundColor:D.sal_role.data.map((_,i)=>i===0?'rgba(52,199,143,0.8)':'rgba(79,142,247,0.65)'), borderWidth:0, borderRadius:3}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{
+    x:{grid:{color:C.grid}, ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'K'}},
+    y:{grid:{display:false}, ticks:{font:{size:10}}}
+  }}
+});
+
+new Chart(document.getElementById('expSalChart'), {
+  type:'bar',
+  data:{
+    labels:D.exp.labels,
+    datasets:[{data:D.exp.salaries, backgroundColor:['rgba(79,142,247,0.6)','rgba(167,139,250,0.7)','rgba(52,199,143,0.7)','rgba(249,115,22,0.8)'], borderWidth:0, borderRadius:4}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{
+    x:{grid:{display:false}},
+    y:{grid:{color:C.grid}, ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'K'}}
+  }}
+});
+
+new Chart(document.getElementById('bandChart'), {
+  type:'bar',
+  data:{
+    labels:['<$70K','$70-100K','$100-130K','$130-160K','$160K+'],
+    datasets:[{data:[2211,1154,2209,2111,2315], backgroundColor:['rgba(239,68,68,0.7)','rgba(249,115,22,0.7)','rgba(250,204,21,0.7)','rgba(52,199,143,0.7)','rgba(79,142,247,0.7)'], borderWidth:0, borderRadius:4}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{
+    x:{grid:{display:false}}, y:{grid:{color:C.grid}}
+  }}
+});
+
+// ── LOCATION CHARTS ───────────────────────────────────────────
+new Chart(document.getElementById('locBarChart'), {
+  type:'bar', indexAxis:'y',
+  data:{labels:D.loc.labels, datasets:[{data:D.loc.data, backgroundColor:'rgba(167,139,250,0.7)', borderColor:'#a78bfa', borderWidth:1, borderRadius:3}]},
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:C.grid}}, y:{grid:{display:false}, ticks:{font:{size:10}}}}}
+});
+
+new Chart(document.getElementById('locSalChart'), {
+  type:'bar', indexAxis:'y',
+  data:{labels:D.loc_sal.labels, datasets:[{data:D.loc_sal.data, backgroundColor:'rgba(52,199,143,0.7)', borderColor:'#34c78f', borderWidth:1, borderRadius:3}]},
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{
+    x:{grid:{color:C.grid}, ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'K'}},
+    y:{grid:{display:false}, ticks:{font:{size:10}}}
+  }}
+});
+
+// Location table
+const locTableData = [
+  ['San Francisco, CA',1342,'$141K','160K+','🇺🇸'],['New York, NY',1008,'$142K','160K+','🇺🇸'],['Seattle, WA',880,'$141K','160K+','🇺🇸'],
+  ['Bengaluru, India',813,'$35K','100-130K','🇮🇳'],['Remote',787,'$138K','130-160K','🌐'],['Austin, TX',684,'$142K','160K+','🇺🇸'],
+  ['Boston, MA',606,'$141K','160K+','🇺🇸'],['Hyderabad, India',511,'$33K','100-130K','🇮🇳'],['Los Angeles, CA',494,'$141K','130-160K','🇺🇸'],
+  ['Pune, India',449,'$31K','<70K','🇮🇳'],['London, UK',390,'£95K','160K+','🇬🇧'],['Berlin, Germany',305,'€88K','130-160K','🇩🇪'],
+];
+const locTbl = document.getElementById('locTable');
+locTbl.innerHTML = '<tr><th>Location</th><th>Jobs</th><th>Avg Salary</th><th>Salary Band</th><th>Market</th></tr>' +
+  locTableData.map(r=>`<tr><td>${r[4]} ${r[0]}</td><td>${r[1].toLocaleString()}</td><td>${r[2]}</td><td><span class="pill pill-blue">${r[3]}</span></td><td>${r[4]==='🇮🇳'?'India (INR)':r[4]==='🌐'?'Global (USD)':'International (USD)'}</td></tr>`).join('');
+
+// ── COMPANY CHARTS ────────────────────────────────────────────
+new Chart(document.getElementById('compChart'), {
+  type:'bar',
+  data:{
+    labels:D.comp.labels,
+    datasets:[{data:D.comp.data, backgroundColor:C.blues, borderWidth:0, borderRadius:4}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{
+    x:{grid:{display:false}, ticks:{font:{size:10}}},
+    y:{grid:{color:C.grid}}
+  }}
+});
+
+const bigTech = D.comp.data.slice(0,6).reduce((a,b)=>a+b,0);
+const others = D.comp.data.slice(6).reduce((a,b)=>a+b,0) + (10000 - D.comp.data.reduce((a,b)=>a+b,0));
+new Chart(document.getElementById('compPieChart'), {
+  type:'doughnut',
+  data:{
+    labels:['Google','Microsoft','Amazon','Meta','Apple','OpenAI','Other Companies'],
+    datasets:[{data:[...D.comp.data.slice(0,6), others], backgroundColor:[...C.blues.slice(0,6),'rgba(139,144,168,0.5)'], borderWidth:0, hoverOffset:6}]
+  },
+  options:{responsive:true, maintainAspectRatio:false, cutout:'52%', plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:10},usePointStyle:true,pointStyleWidth:10}}}}
+});
+
+const compTbl = document.getElementById('compTable');
+const compCats = {Google:'Big Tech',Microsoft:'Big Tech',Amazon:'Big Tech',Meta:'Big Tech',Apple:'Big Tech',OpenAI:'AI-Native',Nvidia:'Semiconductor',TCS:'IT Services',Salesforce:'SaaS',Infosys:'IT Services',IBM:'Enterprise Tech',Wipro:'IT Services'};
+const compPills = {Google:'pill-blue',Microsoft:'pill-blue',Amazon:'pill-blue',Meta:'pill-blue',Apple:'pill-blue',OpenAI:'pill-green',Nvidia:'pill-purple',TCS:'pill-orange',Salesforce:'pill-blue',Infosys:'pill-orange',IBM:'pill-blue',Wipro:'pill-orange'};
+compTbl.innerHTML = '<tr><th>Company</th><th>Job Postings</th><th>Category</th><th>Notable Roles</th><th>Share</th></tr>' +
+  D.comp.labels.map((c,i)=>`<tr>
+    <td><strong>${c}</strong></td>
+    <td>${D.comp.data[i].toLocaleString()}</td>
+    <td><span class="pill ${compPills[c]||'pill-blue'}">${compCats[c]||'Tech'}</span></td>
+    <td style="color:var(--muted);font-size:11px;">ML Eng, Data Sci, AI Research</td>
+    <td>${(D.comp.data[i]/100).toFixed(1)}%</td>
+  </tr>`).join('');
+</script>
+</body>
+</html>
